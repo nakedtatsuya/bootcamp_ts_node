@@ -6,23 +6,16 @@ const port = process.env.PORT ?? 54321;
 
 const SERVER_ORIGIN = `http://localhost:${port}`;
 let server;
+let closedPromise;
 describe("a server", () => {
   before(async () => {
     server = spawn(`PORT=${port} node ./out/server.js`, { shell: true, detached: true });
-    await new Promise((resolve, reject) => {
+    closedPromise = new Promise((resolve) => server.on("close", resolve));
+    await new Promise((resolve) => {
       server.stdout.on("data", (data) => {
         resolve();
       });
-      server.stderr.on("data", (data) => {
-        reject(data.toString())
-      })
-    }).catch((error) => {
-      console.error(error);
-      process.exit(1);
-    })
-    // remove event listeners
-    server.stdout.removeAllListeners();
-    server.stderr.removeAllListeners();
+    });
   });
   it("returns a valid JSON for /sample.json", async () => {
     const response = await fetch(`${SERVER_ORIGIN}/sample.json`);
@@ -53,8 +46,9 @@ describe("a server", () => {
     assert.equal(response.status, 404);
     assert.equal(response.ok, false);
   });
-  after(() => {
-    // server.kill();
-    process.kill(-server.pid);
+  after(async () => {
+    // process.kill(-server.pid);
+    server.kill();
+    await closedPromise;
   });
 });
